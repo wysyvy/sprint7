@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCafeNegative(t *testing.T) {
@@ -46,5 +48,66 @@ func TestCafeWhenOk(t *testing.T) {
 		handler.ServeHTTP(response, req)
 
 		assert.Equal(t, http.StatusOK, response.Code)
+	}
+}
+
+func TestCafeCount(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+	city := "moscow"
+	totalCafes := len(cafeList[city])
+
+	requests := []struct {
+		count int
+		want  int
+	}{
+		{0, 0},
+		{1, 1},
+		{2, 2},
+		{100, totalCafes},
+	}
+
+	for _, v := range requests {
+		url := fmt.Sprintf("/cafe?city=%s&count=%d", city, v.count)
+		req := httptest.NewRequest("GET", url, nil)
+		resp := httptest.NewRecorder()
+
+		handler.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code, "Error URL: %s", url)
+
+		body := strings.TrimSpace(resp.Body.String())
+		var actualCount int
+		if body != "" {
+			actualCount = len(strings.Split(body, ","))
+		}
+
+		assert.Equal(t, v.want, actualCount, "count=%d, want %d, got %d", v.count, v.want, actualCount)
+	}
+}
+
+func TestCafeSearch(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+
+	requests := []struct {
+		search   string
+		expected string
+	}{
+		{"фасоль", ""},
+		{"кофе", "Мир кофе,Кофе и завтраки"},
+		{"вилка", "Ложка и вилка"},
+	}
+
+	for _, v := range requests {
+		url := "/cafe?city=moscow&search=" + v.search
+		req := httptest.NewRequest("GET", url, nil)
+		resp := httptest.NewRecorder()
+
+		handler.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code, "Error search=%q", v.search)
+
+		actual := strings.TrimSpace(resp.Body.String())
+
+		assert.Equal(t, v.expected, actual, "search=%q", v.search)
 	}
 }
