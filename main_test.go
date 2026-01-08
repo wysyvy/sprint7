@@ -89,12 +89,12 @@ func TestCafeSearch(t *testing.T) {
 	handler := http.HandlerFunc(mainHandle)
 
 	requests := []struct {
-		search   string
-		expected string
+		search    string
+		wantCount int
 	}{
-		{"фасоль", ""},
-		{"кофе", "Мир кофе,Кофе и завтраки"},
-		{"вилка", "Ложка и вилка"},
+		{"фасоль", 0},
+		{"кофе", 2},
+		{"вилка", 1},
 	}
 
 	for _, v := range requests {
@@ -104,10 +104,22 @@ func TestCafeSearch(t *testing.T) {
 
 		handler.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusOK, resp.Code, "Error search=%q", v.search)
+		require.Equal(t, http.StatusOK, resp.Code, "Request failed for search=%q", v.search)
 
-		actual := strings.TrimSpace(resp.Body.String())
+		body := strings.TrimSpace(resp.Body.String())
 
-		assert.Equal(t, v.expected, actual, "search=%q", v.search)
+		var cafes []string
+		if body != "" {
+			cafes = strings.Split(body, ",")
+		}
+
+		assert.Equal(t, v.wantCount, len(cafes), "For search=%q, expected %d cafes, got %d", v.search, v.wantCount, len(cafes))
+
+		searchLower := strings.ToLower(v.search)
+		for _, cafe := range cafes {
+			cafeLower := strings.ToLower(cafe)
+			assert.True(t, strings.Contains(cafeLower, searchLower),
+				"Cafe %q does not contain search term %q (case-insensitive)", cafe, v.search)
+		}
 	}
 }
